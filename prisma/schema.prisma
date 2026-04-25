@@ -1,0 +1,220 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id          String    @id @default(cuid())
+  name        String
+  email       String    @unique
+  password    String
+  phone       String?
+  role        String    @default("staff") // admin / staff
+  department  String? // sales / ops / accounts
+  baseSalary  Float     @default(0)
+  joiningDate DateTime?
+  status      String    @default("active") // active / inactive
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  attendances   Attendance[]
+  breaks        AttendanceBreak[]
+  devices       TrustedDevice[]
+  leaveBalances LeaveBalance[]
+  leaveRequests LeaveRequest[]
+  tasksAssigned Task[]            @relation("AssignedTasks")
+  tasksGiven    Task[]            @relation("CreatedTasks")
+  dailyReports  DailyReport[]
+  deals         Deal[]            @relation("UserDeals")
+  dealsApproved Deal[]            @relation("ApprovedDeals")
+  deductions    Deduction[]
+  payrolls      Payroll[]
+}
+
+model Attendance {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id])
+  date                DateTime
+  clockInTime         DateTime?
+  clockOutTime        DateTime?
+  workingHours        Float?
+  status              String? // present / absent / half-day / leave / holiday
+  lateByMinutes       Int?
+  earlyLeaveMinutes   Int?
+  leaveType           String? // sick / casual / paid / unpaid - nullable
+  remarks             String?
+  markedBy            String? // self / admin
+  clockInIp           String?
+  clockOutIp          String?
+  clockInDeviceId     String?
+  clockInPhoto        String?
+  clockOutPhoto       String?
+  otpVerified         Boolean   @default(false)
+  verificationMethod  String? // password / otp / fingerprint / photo
+  autoClockout        Boolean   @default(false)
+  clockoutMethod      String? // manual / auto / admin_override
+  reportSubmitted     Boolean   @default(false)
+  flaggedForReview    Boolean   @default(false)
+  adminOverrideStatus String? // full-day / half-day / absent - nullable
+  adminOverrideReason String?
+  createdAt           DateTime  @default(now())
+
+  breaks AttendanceBreak[]
+}
+
+model AttendanceBreak {
+  id              String     @id @default(cuid())
+  attendanceId    String
+  attendance      Attendance @relation(fields: [attendanceId], references: [id])
+  userId          String
+  user            User       @relation(fields: [userId], references: [id])
+  breakStartTime  DateTime
+  breakEndTime    DateTime?
+  breakType       String // official / lunch / personal
+  reason          String?
+  durationMinutes Int?
+  approvedByAdmin String     @default("pending") // yes / no / pending
+  createdAt       DateTime   @default(now())
+}
+
+model OfficeSetting {
+  id                         String  @id @default(cuid())
+  officeStartTime            String // e.g. "09:00"
+  officeEndTime              String // e.g. "18:00"
+  lateGraceMinutes           Int     @default(15)
+  halfDayThresholdHours      Float   @default(4.0)
+  fullDayThresholdHours      Float   @default(7.0)
+  lunchBreakAllowedMinutes   Int     @default(60)
+  maxPersonalBreakPerDay     Int     @default(30)
+  officialBreakNeedsApproval Boolean @default(false)
+  workingDays                String // e.g. "mon-fri"
+  allowedIpAddresses         String // JSON list of IPs
+  requirePhotoAtClockin      Boolean @default(false)
+  requireOtpAtClockin        Boolean @default(false)
+  requireDeviceBinding       Boolean @default(false)
+}
+
+model TrustedDevice {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  deviceId     String
+  deviceName   String? // e.g. "Reception PC"
+  registeredOn DateTime  @default(now())
+  lastUsed     DateTime?
+  active       Boolean   @default(true)
+}
+
+model LeaveBalance {
+  id               String @id @default(cuid())
+  userId           String
+  user             User   @relation(fields: [userId], references: [id])
+  year             Int // e.g. 2026
+  casualLeaveTotal Float  @default(0)
+  casualLeaveUsed  Float  @default(0)
+  sickLeaveTotal   Float  @default(0)
+  sickLeaveUsed    Float  @default(0)
+  paidLeaveTotal   Float  @default(0)
+  paidLeaveUsed    Float  @default(0)
+}
+
+model LeaveRequest {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  fromDate   DateTime
+  toDate     DateTime
+  leaveType  String // sick / casual / paid / unpaid
+  reason     String?
+  status     String    @default("pending") // pending / approved / rejected
+  approvedBy String?
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Task {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?
+  assignedToId String
+  assignedTo   User      @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  assignedById String
+  assignedBy   User      @relation("CreatedTasks", fields: [assignedById], references: [id])
+  priority     String    @default("medium") // low / medium / high
+  deadline     DateTime?
+  status       String    @default("pending") // pending / in-progress / completed
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model DailyReport {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  date         DateTime
+  workDone     String
+  followUps    String?
+  challenges   String?
+  adminComment String?
+  submittedAt  DateTime @default(now())
+}
+
+model Deal {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation("UserDeals", fields: [userId], references: [id])
+  clientName      String
+  clientContact   String?
+  packageName     String?
+  dealAmount      Float
+  paymentStatus   String    @default("pending") // pending / partial / full
+  dealDate        DateTime
+  incentiveAmount Float?
+  status          String    @default("pending_approval") // pending_approval / approved / rejected
+  approvedById    String?
+  approvedBy      User?     @relation("ApprovedDeals", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+}
+
+model IncentiveRule {
+  id         String  @id @default(cuid())
+  ruleName   String
+  minAmount  Float
+  maxAmount  Float?
+  percentage Float // e.g. 2.0
+  active     Boolean @default(true)
+}
+
+model Deduction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  month     String // e.g. "2026-04"
+  reason    String // absent / late / advance / other
+  amount    Float
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model Payroll {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  month          String // e.g. "2026-04"
+  baseSalary     Float
+  totalIncentive Float    @default(0)
+  totalDeduction Float    @default(0)
+  netSalary      Float
+  generatedOn    DateTime @default(now())
+  status         String   @default("draft") // draft / finalized / paid
+}
